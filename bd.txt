@@ -1,0 +1,346 @@
+-- =========================================================
+-- BASE DE DATOS
+-- =========================================================
+
+DROP DATABASE IF EXISTS sistema_muebles;
+
+CREATE DATABASE sistema_muebles
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+USE sistema_muebles;
+
+
+-- =========================================================
+-- 1. ITEMS DE INVENTARIO
+-- =========================================================
+-- Representa cualquier elemento que pueda tener existencia:
+-- materia prima o producto terminado.
+-- =========================================================
+
+CREATE TABLE items_inventario (
+    id_item INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    codigo VARCHAR(50) NOT NULL,
+    nombre VARCHAR(150) NOT NULL,
+    categoria VARCHAR(100) NULL,
+    unidad_medida VARCHAR(30) NOT NULL,
+
+    estado ENUM('ACTIVO', 'INACTIVO')
+        NOT NULL DEFAULT 'ACTIVO',
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_items_codigo
+        UNIQUE (codigo)
+);
+
+
+-- =========================================================
+-- 2. MATERIAS PRIMAS
+-- =========================================================
+
+CREATE TABLE materias_primas (
+    id_item INT UNSIGNED PRIMARY KEY,
+
+    marca VARCHAR(100) NULL,
+
+    stock_minimo DECIMAL(12,2)
+        NOT NULL DEFAULT 0,
+
+    costo_unitario DECIMAL(12,2)
+        NOT NULL DEFAULT 0,
+
+    observaciones TEXT NULL,
+
+    CONSTRAINT fk_materia_item
+        FOREIGN KEY (id_item)
+        REFERENCES items_inventario(id_item)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT chk_materia_stock_minimo
+        CHECK (stock_minimo >= 0),
+
+    CONSTRAINT chk_materia_costo
+        CHECK (costo_unitario >= 0)
+);
+
+
+-- =========================================================
+-- 3. CARACTERÍSTICAS DE MATERIAS PRIMAS
+-- =========================================================
+
+CREATE TABLE caracteristicas_materia_prima (
+    id_caracteristica INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    id_item INT UNSIGNED NOT NULL,
+
+    nombre VARCHAR(100) NOT NULL,
+    valor VARCHAR(255) NOT NULL,
+    unidad VARCHAR(30) NULL,
+
+    CONSTRAINT fk_caracteristica_materia
+        FOREIGN KEY (id_item)
+        REFERENCES materias_primas(id_item)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT uq_caracteristica_materia
+        UNIQUE (id_item, nombre)
+);
+
+
+-- =========================================================
+-- 4. PRODUCTOS TERMINADOS
+-- =========================================================
+
+CREATE TABLE productos_terminados (
+    id_item INT UNSIGNED PRIMARY KEY,
+
+    costo_fabricacion DECIMAL(12,2)
+        NOT NULL DEFAULT 0,
+
+    precio_venta DECIMAL(12,2)
+        NOT NULL DEFAULT 0,
+
+    stock_minimo DECIMAL(12,2)
+        NOT NULL DEFAULT 0,
+
+    observaciones TEXT NULL,
+
+    CONSTRAINT fk_producto_item
+        FOREIGN KEY (id_item)
+        REFERENCES items_inventario(id_item)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT chk_producto_costo
+        CHECK (costo_fabricacion >= 0),
+
+    CONSTRAINT chk_producto_precio
+        CHECK (precio_venta >= 0),
+
+    CONSTRAINT chk_producto_stock_minimo
+        CHECK (stock_minimo >= 0)
+);
+
+
+-- =========================================================
+-- 5. CARACTERÍSTICAS DE PRODUCTOS TERMINADOS
+-- =========================================================
+
+CREATE TABLE caracteristicas_producto (
+    id_caracteristica INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    id_item INT UNSIGNED NOT NULL,
+
+    nombre VARCHAR(100) NOT NULL,
+    valor VARCHAR(255) NOT NULL,
+    unidad VARCHAR(30) NULL,
+
+    CONSTRAINT fk_caracteristica_producto
+        FOREIGN KEY (id_item)
+        REFERENCES productos_terminados(id_item)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT uq_caracteristica_producto
+        UNIQUE (id_item, nombre)
+);
+
+
+-- =========================================================
+-- 6. UBICACIONES
+-- =========================================================
+
+CREATE TABLE ubicaciones (
+    id_ubicacion INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    nombre VARCHAR(100) NOT NULL,
+    tipo VARCHAR(50) NOT NULL,
+    descripcion VARCHAR(255) NULL,
+
+    estado ENUM('ACTIVO', 'INACTIVO')
+        NOT NULL DEFAULT 'ACTIVO',
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_ubicacion_nombre
+        UNIQUE (nombre)
+);
+
+
+-- =========================================================
+-- 7. EXISTENCIAS
+-- =========================================================
+-- Aquí se registra cuánto existe de cada item
+-- en cada ubicación.
+-- =========================================================
+
+CREATE TABLE existencias (
+    id_existencia INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    id_item INT UNSIGNED NOT NULL,
+    id_ubicacion INT UNSIGNED NOT NULL,
+
+    cantidad DECIMAL(12,2)
+        NOT NULL DEFAULT 0,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_existencia_item
+        FOREIGN KEY (id_item)
+        REFERENCES items_inventario(id_item)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_existencia_ubicacion
+        FOREIGN KEY (id_ubicacion)
+        REFERENCES ubicaciones(id_ubicacion)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT uq_existencia_item_ubicacion
+        UNIQUE (id_item, id_ubicacion),
+
+    CONSTRAINT chk_existencia_cantidad
+        CHECK (cantidad >= 0)
+);
+
+
+-- =========================================================
+-- 8. MOVIMIENTOS DE INVENTARIO
+-- =========================================================
+
+CREATE TABLE movimientos_inventario (
+    id_movimiento INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    id_item INT UNSIGNED NOT NULL,
+
+    id_ubicacion_origen INT UNSIGNED NULL,
+    id_ubicacion_destino INT UNSIGNED NULL,
+
+    id_usuario INT UNSIGNED NULL,
+
+    tipo_movimiento ENUM(
+        'ENTRADA',
+        'SALIDA',
+        'TRANSFERENCIA',
+        'AJUSTE_POSITIVO',
+        'AJUSTE_NEGATIVO',
+        'CONSUMO',
+        'PRODUCCION'
+    ) NOT NULL,
+
+    cantidad DECIMAL(12,2) NOT NULL,
+
+    motivo VARCHAR(255) NULL,
+    observaciones TEXT NULL,
+
+    fecha_movimiento DATETIME
+        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_movimiento_item
+        FOREIGN KEY (id_item)
+        REFERENCES items_inventario(id_item)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_movimiento_origen
+        FOREIGN KEY (id_ubicacion_origen)
+        REFERENCES ubicaciones(id_ubicacion)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_movimiento_destino
+        FOREIGN KEY (id_ubicacion_destino)
+        REFERENCES ubicaciones(id_ubicacion)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_movimiento_usuario
+        FOREIGN KEY (id_usuario)
+        REFERENCES usuarios(id_usuario)
+        ON DELETE SET NULL
+        ON UPDATE CASCADE,
+
+    CONSTRAINT chk_movimiento_cantidad
+        CHECK (cantidad > 0)
+);
+
+
+-- =========================================================
+-- 9. USUARIOS
+-- =========================================================
+-- Cuentas de acceso al sistema. rol define el nivel de
+-- permisos: ADMINISTRADOR (acceso global, gestiona usuarios)
+-- o USUARIO (acceso operativo, solo ve/edita su propia cuenta).
+-- =========================================================
+
+CREATE TABLE usuarios (
+    id_usuario INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+    nombre_completo VARCHAR(150) NOT NULL,
+    usuario VARCHAR(50) NOT NULL,
+    correo VARCHAR(150) NULL,
+
+    password_hash VARCHAR(255) NOT NULL,
+
+    rol ENUM('ADMINISTRADOR', 'USUARIO')
+        NOT NULL DEFAULT 'USUARIO',
+
+    estado ENUM('ACTIVO', 'INACTIVO')
+        NOT NULL DEFAULT 'ACTIVO',
+
+    ultimo_acceso DATETIME NULL,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_usuarios_usuario
+        UNIQUE (usuario)
+);
+
+
+-- =========================================================
+-- ÍNDICES
+-- =========================================================
+
+CREATE INDEX idx_items_nombre
+    ON items_inventario(nombre);
+
+CREATE INDEX idx_items_categoria
+    ON items_inventario(categoria);
+
+CREATE INDEX idx_materias_marca
+    ON materias_primas(marca);
+
+CREATE INDEX idx_existencias_item
+    ON existencias(id_item);
+
+CREATE INDEX idx_existencias_ubicacion
+    ON existencias(id_ubicacion);
+
+CREATE INDEX idx_movimientos_item
+    ON movimientos_inventario(id_item);
+
+CREATE INDEX idx_movimientos_fecha
+    ON movimientos_inventario(fecha_movimiento);
+
+CREATE INDEX idx_movimientos_origen
+    ON movimientos_inventario(id_ubicacion_origen);
+
+CREATE INDEX idx_movimientos_destino
+    ON movimientos_inventario(id_ubicacion_destino);
+
+CREATE INDEX idx_movimientos_usuario
+    ON movimientos_inventario(id_usuario);
+
+CREATE INDEX idx_usuarios_rol
+    ON usuarios(rol);
